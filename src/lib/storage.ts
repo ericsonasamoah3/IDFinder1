@@ -37,94 +37,78 @@ export type FoundIDRecord = {
   matched_lost_id?: string;
 };
 
-const LOST_KEY = "id_finder_lost";
-const FOUND_KEY = "id_finder_found";
+const BASE = import.meta.env.VITE_IDFINDER_API_BASE as string;
 
-function safeParse<T>(raw: string | null, fallback: T): T {
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
+function assertBase() {
+  if (!BASE) throw new Error("VITE_IDFINDER_API_BASE is not set");
+}
+
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  assertBase();
+
+  const res = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
+
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+
+  if (!res.ok) {
+    const msg = data?.error || data?.message || `HTTP ${res.status}`;
+    throw new Error(msg);
   }
+
+  return data as T;
 }
 
-export function listLostIDs(): LostIDRecord[] {
-  const items = safeParse<LostIDRecord[]>(localStorage.getItem(LOST_KEY), []);
-  return [...items].sort(
+// ---------- LIST ----------
+export async function listLostIDs(limit = 50): Promise<LostIDRecord[]> {
+  const resp = await apiFetch<{ ok: true; items: LostIDRecord[] }>(
+    `/IDfinder?record_type=lost&limit=${encodeURIComponent(String(limit))}`,
+    { method: "GET" }
+  );
+
+  return [...(resp.items ?? [])].sort(
     (a, b) => new Date(b.created_date).getTime() - new Date(a.created_date).getTime()
   );
 }
 
-export function listFoundIDs(): FoundIDRecord[] {
-  const items = safeParse<FoundIDRecord[]>(localStorage.getItem(FOUND_KEY), []);
-  return [...items].sort(
+export async function listFoundIDs(limit = 50): Promise<FoundIDRecord[]> {
+  const resp = await apiFetch<{ ok: true; items: FoundIDRecord[] }>(
+    `/IDfinder?record_type=found&limit=${encodeURIComponent(String(limit))}`,
+    { method: "GET" }
+  );
+
+  return [...(resp.items ?? [])].sort(
     (a, b) => new Date(b.created_date).getTime() - new Date(a.created_date).getTime()
   );
 }
 
-export function saveLostIDs(items: LostIDRecord[]) {
-  localStorage.setItem(LOST_KEY, JSON.stringify(items));
-}
-
-export function saveFoundIDs(items: FoundIDRecord[]) {
-  localStorage.setItem(FOUND_KEY, JSON.stringify(items));
-}
-
-function makeId(prefix: string): string {
-  // fallback if crypto.randomUUID isn't available
-  const id = typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : Math.random().toString(16).slice(2);
-  return `${prefix}_${id}`;
-}
-
+// ---------- CREATE ----------
 export type CreateLostInput = Omit<LostIDRecord, "id" | "created_date" | "status"> & {
   status?: LostStatus;
 };
 
-export function createLostID(input: CreateLostInput): LostIDRecord {
-  const item: LostIDRecord = {
-    id: makeId("lost"),
-    created_date: new Date().toISOString(),
-    status: input.status ?? "searching",
-    owner_name: input.owner_name,
-    owner_email: input.owner_email,
-    id_type: input.id_type,
-    id_number_hint: input.id_number_hint || "",
-    last_seen_location: input.last_seen_location || "",
-    description: input.description || "",
-    matched_found_id: input.matched_found_id,
-  };
-
-  const all = listLostIDs();
-  all.unshift(item);
-  saveLostIDs(all);
-  return item;
+export async function createLostID(input: CreateLostInput): Promise<LostIDRecord> {
+  const resp = await apiFetch<{ ok: true; item: LostIDRecord }>(`/IDfinder`, {
+    method: "POST",
+    body: JSON.stringify({ mode: "lost", ...input }),
+  });
+  return resp.item;
 }
 
 export type CreateFoundInput = Omit<FoundIDRecord, "id" | "created_date" | "status"> & {
   status?: FoundStatus;
 };
 
-export function createFoundID(input: CreateFoundInput): FoundIDRecord {
-  const item: FoundIDRecord = {
-    id: makeId("found"),
-    created_date: new Date().toISOString(),
-    status: input.status ?? "unclaimed",
-    name_on_id: input.name_on_id,
-    id_type: input.id_type,
-    id_number_hint: input.id_number_hint || "",
-    found_location: input.found_location,
-    photo_url: input.photo_url || "",
-    finder_name: input.finder_name || "",
-    finder_contact: input.finder_contact,
-    description: input.description || "",
-    matched_lost_id: input.matched_lost_id,
-  };
-
-  const all = listFoundIDs();
-  all.unshift(item);
-  saveFoundIDs(all);
-  return item;
+export async function createFoundID(input: CreateFoundInput): Promise<FoundIDRecord> {
+  const resp = await apiFetch<{ ok: true; item: FoundIDRecord }>(`/IDfinder`, {
+    method: "POST",
+    body: JSON.stringify({ mode: "found", ...input }),
+  });
+  return resp.item;
 }

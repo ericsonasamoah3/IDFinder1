@@ -5,6 +5,7 @@ import path from "path";
 export default defineConfig(({ mode }) => ({
   base: mode === "ghpages" ? "/IDFinder/" : "/",
   plugins: [react()],
+  envDir: ".",        //
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

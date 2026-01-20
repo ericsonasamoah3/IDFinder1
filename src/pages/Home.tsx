@@ -11,6 +11,9 @@ import { listLostIDs, listFoundIDs } from "../lib/storage";
 
 import type { LostIDRecord, FoundIDRecord } from "../lib/storage";
 
+console.log("MODE:", import.meta.env.MODE);
+console.log("BASE:", import.meta.env.VITE_IDFINDER_API_BASE);
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"lost" | "found">("lost");
 
