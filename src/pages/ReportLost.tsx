@@ -58,12 +58,14 @@ export default function ReportLost() {
       });
 
       // Local “match” check against found IDs (no email sending in frontend-only app)
-      const foundIDs = listFoundIDs();
+      const foundIDs = await listFoundIDs();
       const matches = foundIDs.filter(
         (found) =>
           found.status === "unclaimed" &&
           found.id_type === data.id_type &&
-          found.name_on_id.toLowerCase().includes(data.owner_name.toLowerCase())
+          found.name_on_id
+            .toLowerCase()
+            .includes(data.owner_name.toLowerCase()),
       );
 
       return { newReport, matchesCount: matches.length };
@@ -73,11 +75,11 @@ export default function ReportLost() {
 
       if (matchesCount > 0) {
         toast.success(
-          `Lost ID reported! We found ${matchesCount} possible match(es) in Found IDs.`
+          `Lost ID reported! We found ${matchesCount} possible match(es) in Found IDs.`,
         );
       } else {
         toast.success(
-          "Lost ID reported successfully! We'll notify you if we find a match (local only)."
+          "Lost ID reported successfully! We'll notify you if we find a match (local only).",
         );
       }
 

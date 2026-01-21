@@ -88,12 +88,12 @@ export default function ReportFound() {
       });
 
       // Local “match” check against lost IDs
-      const lostIDs = listLostIDs();
+      const lostIDs = await listLostIDs();
       const matches = lostIDs.filter(
         (lost) =>
           lost.status === "searching" &&
           lost.id_type === data.id_type &&
-          lost.owner_name.toLowerCase().includes(data.name_on_id.toLowerCase())
+          lost.owner_name.toLowerCase().includes(data.name_on_id.toLowerCase()),
       );
 
       return { newReport, matchesCount: matches.length };
@@ -103,7 +103,7 @@ export default function ReportFound() {
 
       if (matchesCount > 0) {
         toast.success(
-          `Found ID reported! ${matchesCount} possible match(es) exist in Lost IDs.`
+          `Found ID reported! ${matchesCount} possible match(es) exist in Lost IDs.`,
         );
       } else {
         toast.success("Found ID reported!");
