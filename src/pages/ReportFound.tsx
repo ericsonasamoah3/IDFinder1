@@ -237,7 +237,7 @@ export default function ReportFound() {
                 <Input
                   required
                   value={formData.name_on_id}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
                     setFormData({ ...formData, name_on_id: e.target.value })
                   }
                   placeholder="Auto-filled from photo"
@@ -275,7 +275,7 @@ export default function ReportFound() {
                 <Input
                   value={formData.id_number_hint}
                   maxLength={4}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
                     setFormData({
                       ...formData,
                       id_number_hint: e.target.value,
@@ -290,7 +290,7 @@ export default function ReportFound() {
                 <Input
                   required
                   value={formData.found_location}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
                     setFormData({
                       ...formData,
                       found_location: e.target.value,
@@ -304,7 +304,7 @@ export default function ReportFound() {
                 <Input
                   required
                   value={formData.finder_name}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
                     setFormData({ ...formData, finder_name: e.target.value })
                   }
                 />
@@ -317,7 +317,7 @@ export default function ReportFound() {
                   type="email"
                   required
                   value={formData.finder_contact}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
                     setFormData({ ...formData, finder_contact: e.target.value })
                   }
                 />

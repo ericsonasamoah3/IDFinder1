@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Search, AlertCircle, LogIn, LogOut } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "../utils";
@@ -68,7 +67,7 @@ export default function Home() {
           {!loading &&
             (user ? (
               <button
-                onClick={logout}
+                onClick={() => logout()}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -87,7 +86,7 @@ export default function Home() {
               </button>
             ) : (
               <button
-                onClick={login}
+                onClick={() => login()}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -128,41 +127,63 @@ export default function Home() {
       <div
         style={{ maxWidth: "1200px", margin: "0 auto", padding: "32px 40px" }}
       >
-        <Tabs
-          value={activeTab}
-          onValueChange={(v: string) => setActiveTab(v as "lost" | "found")}
+        {/* Tabs */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            marginBottom: "32px",
+          }}
         >
-          {/* Centered tabs */}
           <div
             style={{
+              backgroundColor: "#2a2a3e",
+              borderRadius: "8px",
+              padding: "4px",
               display: "flex",
-              justifyContent: "center",
-              marginBottom: "32px",
+              width: "400px",
             }}
           >
-            <TabsList style={{ backgroundColor: "#2a2a3e", width: "400px" }}>
-              <TabsTrigger
-                value="lost"
-                style={{
-                  flex: 1,
-                  color: activeTab === "lost" ? "#f43f5e" : "#9ca3af",
-                }}
-              >
-                Lost IDs ({lostIDs.length})
-              </TabsTrigger>
-              <TabsTrigger
-                value="found"
-                style={{
-                  flex: 1,
-                  color: activeTab === "found" ? "#10b981" : "#9ca3af",
-                }}
-              >
-                Found IDs ({foundIDs.length})
-              </TabsTrigger>
-            </TabsList>
+            <button
+              onClick={() => setActiveTab("lost")}
+              style={{
+                flex: 1,
+                padding: "8px",
+                borderRadius: "6px",
+                border: "none",
+                cursor: "pointer",
+                backgroundColor:
+                  activeTab === "lost" ? "#1a1a2e" : "transparent",
+                color: activeTab === "lost" ? "#f43f5e" : "#9ca3af",
+                fontSize: "14px",
+                fontWeight: activeTab === "lost" ? 600 : 400,
+              }}
+            >
+              Lost IDs ({lostIDs.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("found")}
+              style={{
+                flex: 1,
+                padding: "8px",
+                borderRadius: "6px",
+                border: "none",
+                cursor: "pointer",
+                backgroundColor:
+                  activeTab === "found" ? "#1a1a2e" : "transparent",
+                color: activeTab === "found" ? "#10b981" : "#9ca3af",
+                fontSize: "14px",
+                fontWeight: activeTab === "found" ? 600 : 400,
+              }}
+            >
+              Found IDs ({foundIDs.length})
+            </button>
           </div>
+        </div>
 
-          <TabsContent value="lost">
+        {/* Lost IDs */}
+        {activeTab === "lost" && (
+          <>
             {loadingLost ? (
               <div
                 style={{
@@ -224,9 +245,12 @@ export default function Home() {
                 ))}
               </div>
             )}
-          </TabsContent>
+          </>
+        )}
 
-          <TabsContent value="found">
+        {/* Found IDs */}
+        {activeTab === "found" && (
+          <>
             {loadingFound ? (
               <div
                 style={{
@@ -288,8 +312,8 @@ export default function Home() {
                 ))}
               </div>
             )}
-          </TabsContent>
-        </Tabs>
+          </>
+        )}
       </div>
     </div>
   );

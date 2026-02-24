@@ -234,7 +234,7 @@ export default function ReportLost() {
                 <Input
                   required
                   value={formData.owner_name}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
                     setFormData({ ...formData, owner_name: e.target.value })
                   }
                 />
@@ -247,7 +247,7 @@ export default function ReportLost() {
                   type="email"
                   required
                   value={formData.owner_email}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
                     setFormData({ ...formData, owner_email: e.target.value })
                   }
                 />
@@ -284,7 +284,7 @@ export default function ReportLost() {
                 <Input
                   maxLength={4}
                   value={formData.id_number_hint}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
                     setFormData({
                       ...formData,
                       id_number_hint: e.target.value,
@@ -299,7 +299,7 @@ export default function ReportLost() {
                 <Input
                   required
                   value={formData.last_seen_location}
-                  onChange={(e) =>
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
                     setFormData({
                       ...formData,
                       last_seen_location: e.target.value,
