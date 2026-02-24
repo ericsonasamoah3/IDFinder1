@@ -194,7 +194,7 @@ export default function ReportLost() {
                       <img
                         src={photoUrl}
                         alt="ID Preview"
-                        className="w-32 h-32 object-contain mx-auto rounded-lg"
+                        className="w-24 h-24 object-contain rounded-lg"
                       />
                       <Button
                         type="button"

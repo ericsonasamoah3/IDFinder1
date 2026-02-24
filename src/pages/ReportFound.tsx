@@ -197,7 +197,7 @@ export default function ReportFound() {
                       <img
                         src={photoUrl}
                         alt="ID Preview"
-                        className="w-32 h-32 object-contain mx-auto rounded-lg"
+                        className="w-24 h-24 object-contain mx-auto rounded-lg"
                       />
                       <Button
                         type="button"
