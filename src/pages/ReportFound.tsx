@@ -19,6 +19,9 @@ import { toast } from "sonner";
 import { createFoundID, listLostIDs } from "../lib/storage";
 import type { IDType } from "../lib/storage";
 
+const PROCESS_URL = import.meta.env.VITE_ID_PROCESS;
+const SAVE_URL = import.meta.env.VITE_ID_SAVE;
+
 type FormState = {
   name_on_id: string;
   id_type: IDType | "";
@@ -44,6 +47,7 @@ export default function ReportFound() {
 
   const [uploading, setUploading] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string>("");
+  const [imageBase64, setImageBase64] = useState<string>("");
 
   const [formData, setFormData] = useState<FormState>({
     name_on_id: "",
@@ -60,16 +64,47 @@ export default function ReportFound() {
     if (!file) return;
 
     setUploading(true);
+
     try {
-      // Store as base64 data URL so it persists in localStorage
       const dataUrl = await fileToDataUrl(file);
       setPhotoUrl(dataUrl);
-      toast.success("Photo added!");
-    } catch {
-      toast.error("Failed to read photo");
+
+      const base64String = dataUrl.split(",")[1];
+      setImageBase64(base64String);
+
+      const response = await fetch(PROCESS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          image_base64: base64String,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Image processing failed");
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        setFormData((prev) => ({
+          ...prev,
+          name_on_id: result.name_on_id ?? "",
+          id_type: result.id_type ?? "",
+          id_number_hint: result.id_number_hint ?? "",
+        }));
+
+        toast.success("ID details auto-filled!");
+      } else {
+        toast.error(result.error || "Failed to extract ID details");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Image processing failed");
     } finally {
       setUploading(false);
-      // allow re-selecting same file
       e.target.value = "";
     }
   };
@@ -80,34 +115,34 @@ export default function ReportFound() {
         throw new Error("ID type is required");
       }
 
-      // Save found report locally
+      // Send image to S3 via Lambda if one was uploaded
+      if (imageBase64) {
+        const saveResponse = await fetch(SAVE_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image_base64: imageBase64,
+            form_type: "found",
+          }),
+        });
+
+        if (!saveResponse.ok) {
+          throw new Error("Failed to save image");
+        }
+      }
+
       const newReport = createFoundID({
         ...data,
         id_type: data.id_type,
-        photo_url: photoUrl,
+        finder_contact: data.finder_contact,
+        finder_name: data.finder_name,
       });
 
-      // Local “match” check against lost IDs
-      const lostIDs = await listLostIDs();
-      const matches = lostIDs.filter(
-        (lost) =>
-          lost.status === "searching" &&
-          lost.id_type === data.id_type &&
-          lost.owner_name.toLowerCase().includes(data.name_on_id.toLowerCase()),
-      );
-
-      return { newReport, matchesCount: matches.length };
+      return { newReport };
     },
-    onSuccess: ({ matchesCount }) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["foundIDs"] });
-
-      if (matchesCount > 0) {
-        toast.success(
-          `Found ID reported! ${matchesCount} possible match(es) exist in Lost IDs.`,
-        );
-      } else {
-        toast.success("Found ID reported!");
-      }
+      toast.success("Found ID reported successfully!");
 
       navigate(createPageUrl("Home"));
     },
@@ -138,7 +173,7 @@ export default function ReportFound() {
               Report Found ID
             </CardTitle>
             <p className="text-emerald-50 mt-2">
-              Help someone recover their lost ID
+              Upload a photo to auto-fill ID details
             </p>
           </CardHeader>
 
@@ -146,7 +181,16 @@ export default function ReportFound() {
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Photo Upload */}
               <div className="space-y-2">
-                <Label>ID Photo (Optional)</Label>
+                <div>
+                  <Label>ID Photo (Optional)</Label>
+                  {uploading && (
+                    <p className="text-sm text-emerald-600 mt-1 flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Processing...
+                    </p>
+                  )}
+                </div>
+
                 <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-emerald-400 transition-colors">
                   {photoUrl ? (
                     <div className="relative">
@@ -160,7 +204,10 @@ export default function ReportFound() {
                         variant="destructive"
                         size="icon"
                         className="absolute top-2 right-2"
-                        onClick={() => setPhotoUrl("")}
+                        onClick={() => {
+                          setPhotoUrl("");
+                          setImageBase64("");
+                        }}
                       >
                         <X className="h-4 w-4" />
                       </Button>
@@ -169,7 +216,7 @@ export default function ReportFound() {
                     <label htmlFor="photo" className="cursor-pointer">
                       <Upload className="h-12 w-12 text-slate-400 mx-auto mb-3" />
                       <p className="text-sm text-slate-600 mb-2">
-                        {uploading ? "Uploading..." : "Click to upload photo"}
+                        Click to upload photo
                       </p>
                       <Input
                         id="photo"
@@ -184,27 +231,27 @@ export default function ReportFound() {
                 </div>
               </div>
 
+              {/* Name */}
               <div className="space-y-2">
-                <Label htmlFor="name_on_id">Name on ID *</Label>
+                <Label>Name on ID *</Label>
                 <Input
-                  id="name_on_id"
                   required
                   value={formData.name_on_id}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  onChange={(e) =>
                     setFormData({ ...formData, name_on_id: e.target.value })
                   }
-                  placeholder="As shown on the ID"
+                  placeholder="Auto-filled from photo"
                 />
               </div>
 
+              {/* ID Type */}
               <div className="space-y-2">
-                <Label htmlFor="id_type">ID Type *</Label>
+                <Label>ID Type *</Label>
                 <Select
                   value={formData.id_type}
                   onValueChange={(value: string) =>
                     setFormData({ ...formData, id_type: value as IDType })
                   }
-                  required
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select ID type" />
@@ -222,75 +269,78 @@ export default function ReportFound() {
                 </Select>
               </div>
 
+              {/* Last 4 */}
               <div className="space-y-2">
-                <Label htmlFor="id_number_hint">Last 4 Digits Visible</Label>
+                <Label>Last 4 Digits *</Label>
                 <Input
-                  id="id_number_hint"
                   value={formData.id_number_hint}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setFormData({ ...formData, id_number_hint: e.target.value })
-                  }
-                  placeholder="Help verify the owner"
                   maxLength={4}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      id_number_hint: e.target.value,
+                    })
+                  }
                 />
               </div>
 
+              {/* Remaining Fields */}
               <div className="space-y-2">
-                <Label htmlFor="found_location">Where You Found It *</Label>
+                <Label>Where You Found It *</Label>
                 <Input
-                  id="found_location"
                   required
                   value={formData.found_location}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setFormData({ ...formData, found_location: e.target.value })
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      found_location: e.target.value,
+                    })
                   }
-                  placeholder="e.g., City Library, Bus Station"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="finder_name">Your Name *</Label>
+                <Label>Your Name *</Label>
                 <Input
-                  id="finder_name"
                   required
                   value={formData.finder_name}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  onChange={(e) =>
                     setFormData({ ...formData, finder_name: e.target.value })
                   }
-                  placeholder="So the owner can thank you"
                 />
               </div>
 
+              {/* Email */}
               <div className="space-y-2">
-                <Label htmlFor="finder_contact">Your Contact Info *</Label>
+                <Label>Your Email *</Label>
                 <Input
-                  id="finder_contact"
+                  type="email"
                   required
                   value={formData.finder_contact}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  onChange={(e) =>
                     setFormData({ ...formData, finder_contact: e.target.value })
                   }
-                  placeholder="Phone or email"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Additional Details</Label>
+                <Label>Additional Details</Label>
                 <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  placeholder="Any other details..."
                   rows={4}
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      description: e.target.value,
+                    })
+                  }
                 />
               </div>
 
               <Button
                 type="submit"
                 className="w-full bg-emerald-600 hover:bg-emerald-700"
-                disabled={reportMutation.isPending}
+                disabled={reportMutation.isPending || uploading}
               >
                 {reportMutation.isPending ? (
                   <>

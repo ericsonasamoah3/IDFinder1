@@ -5,19 +5,19 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-  "dev": "vite",
-  "build": "tsc -b && vite build",
-  "build:ghpages": "tsc -b && vite build --mode ghpages",
-  "lint": "eslint .",
-  "preview": "vite preview",
-  "predeploy": "npm run build:ghpages",
-  "deploy": "gh-pages -d dist"
-},
-
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:ghpages": "tsc -b && vite build --mode ghpages",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "predeploy": "npm run build:ghpages",
+    "deploy": "gh-pages -d dist"
+  },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.966.0",
     "@aws-sdk/lib-dynamodb": "^3.966.0",
     "@tanstack/react-query": "^5.90.14",
+    "aws-amplify": "^6.16.2",
     "bootstrap": "^5.3.8",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.23.26",

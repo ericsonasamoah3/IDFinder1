@@ -59,6 +59,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const msg = data?.error || data?.message || `HTTP ${res.status}`;
+    console.log("API Error:", res.status, data); 
     throw new Error(msg);
   }
 

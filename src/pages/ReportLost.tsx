@@ -12,12 +12,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AlertCircle, ArrowLeft, Loader2 } from "lucide-react";
+import { Upload, ArrowLeft, Loader2, X, AlertCircle } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "../utils";
 import { toast } from "sonner";
 import { createLostID, listFoundIDs } from "../lib/storage";
 import type { IDType } from "../lib/storage";
+
+const PROCESS_URL = import.meta.env.VITE_ID_PROCESS;
+const SAVE_URL = import.meta.env.VITE_ID_SAVE;
 
 type FormState = {
   owner_name: string;
@@ -28,9 +31,22 @@ type FormState = {
   description: string;
 };
 
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.onload = () => resolve(String(reader.result));
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function ReportLost() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const [uploading, setUploading] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string>("");
+  const [imageBase64, setImageBase64] = useState<string>("");
 
   const [formData, setFormData] = useState<FormState>({
     owner_name: "",
@@ -41,13 +57,75 @@ export default function ReportLost() {
     description: "",
   });
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      setPhotoUrl(dataUrl);
+
+      const base64String = dataUrl.split(",")[1];
+      setImageBase64(base64String);
+
+      const response = await fetch(PROCESS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image_base64: base64String }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Image processing failed");
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        setFormData((prev) => ({
+          ...prev,
+          owner_name: result.name_on_id ?? "",
+          id_type: result.id_type ?? "",
+          id_number_hint: result.id_number_hint ?? "",
+        }));
+
+        toast.success("ID details auto-filled!");
+      } else {
+        toast.error(result.error || "Failed to extract ID details");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Image processing failed");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
   const reportMutation = useMutation({
     mutationFn: async (data: FormState) => {
       if (!data.id_type) {
         throw new Error("ID type is required");
       }
 
-      // Save lost report locally
+      // Send image to S3 via Lambda if one was uploaded
+      if (imageBase64) {
+        const saveResponse = await fetch(SAVE_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image_base64: imageBase64,
+            form_type: "lost",
+          }),
+        });
+
+        if (!saveResponse.ok) {
+          throw new Error("Failed to save image");
+        }
+      }
+
+      // ✅ YOUR ORIGINAL LOGIC PRESERVED
       const newReport = createLostID({
         owner_name: data.owner_name,
         owner_email: data.owner_email,
@@ -57,31 +135,11 @@ export default function ReportLost() {
         description: data.description,
       });
 
-      // Local “match” check against found IDs (no email sending in frontend-only app)
-      const foundIDs = await listFoundIDs();
-      const matches = foundIDs.filter(
-        (found) =>
-          found.status === "unclaimed" &&
-          found.id_type === data.id_type &&
-          found.name_on_id
-            .toLowerCase()
-            .includes(data.owner_name.toLowerCase()),
-      );
-
-      return { newReport, matchesCount: matches.length };
+      return { newReport };
     },
-    onSuccess: ({ matchesCount }) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["lostIDs"] });
-
-      if (matchesCount > 0) {
-        toast.success(
-          `Lost ID reported! We found ${matchesCount} possible match(es) in Found IDs.`,
-        );
-      } else {
-        toast.success(
-          "Lost ID reported successfully! We'll notify you if we find a match (local only).",
-        );
-      }
+      toast.success("Lost ID reported successfully!");
 
       navigate(createPageUrl("Home"));
     },
@@ -90,7 +148,7 @@ export default function ReportLost() {
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     reportMutation.mutate(formData);
   };
@@ -106,53 +164,103 @@ export default function ReportLost() {
         </Link>
 
         <Card className="shadow-xl border-0">
-          <CardHeader className="bg-danger text-white">
-            <CardTitle className="d-flex align-items-center gap-2">
-              <AlertCircle />
+          <CardHeader className="bg-gradient-to-r from-rose-500 to-orange-500 text-white rounded-t-lg">
+            <CardTitle className="flex items-center gap-3 text-2xl">
+              <AlertCircle className="h-7 w-7" />
               Report Lost ID
             </CardTitle>
-            <p className="mb-0 opacity-75">
-              Fill in the details so we can help you find your ID
+            <p className="text-rose-50 mt-2">
+              Upload your ID to auto-fill your details
             </p>
           </CardHeader>
 
           <CardContent className="p-6">
             <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Photo Upload */}
               <div className="space-y-2">
-                <Label htmlFor="owner_name">Your Full Name *</Label>
+                <div>
+                  <Label>ID Photo (Optional)</Label>
+                  {uploading && (
+                    <p className="text-sm text-rose-600 mt-1 flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Processing...
+                    </p>
+                  )}
+                </div>
+
+                <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-rose-400 transition-colors">
+                  {photoUrl ? (
+                    <div className="relative">
+                      <img
+                        src={photoUrl}
+                        alt="ID Preview"
+                        className="max-h-48 mx-auto rounded-lg"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="absolute top-2 right-2"
+                        onClick={() => {
+                          setPhotoUrl("");
+                          setImageBase64("");
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <label htmlFor="photo" className="cursor-pointer">
+                      <Upload className="h-12 w-12 text-slate-400 mx-auto mb-3" />
+                      <p className="text-sm text-slate-600 mb-2">
+                        Click to upload photo
+                      </p>
+                      <Input
+                        id="photo"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleFileUpload}
+                        disabled={uploading}
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              {/* Owner Name */}
+              <div className="space-y-2">
+                <Label>Your Full Name *</Label>
                 <Input
-                  id="owner_name"
                   required
                   value={formData.owner_name}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  onChange={(e) =>
                     setFormData({ ...formData, owner_name: e.target.value })
                   }
-                  placeholder="As shown on your ID"
                 />
               </div>
 
+              {/* Email */}
               <div className="space-y-2">
-                <Label htmlFor="owner_email">Your Email *</Label>
+                <Label>Your Email *</Label>
                 <Input
-                  id="owner_email"
                   type="email"
                   required
                   value={formData.owner_email}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  onChange={(e) =>
                     setFormData({ ...formData, owner_email: e.target.value })
                   }
-                  placeholder="We'll notify you here if found"
                 />
               </div>
 
+              {/* ID Type */}
               <div className="space-y-2">
-                <Label htmlFor="id_type">ID Type *</Label>
+                <Label>ID Type *</Label>
                 <Select
                   value={formData.id_type}
-                  onValueChange={(value) =>
+                  onValueChange={(value: string) =>
                     setFormData({ ...formData, id_type: value as IDType })
                   }
-                  required
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select ID type" />
@@ -170,54 +278,55 @@ export default function ReportLost() {
                 </Select>
               </div>
 
+              {/* Last 4 */}
               <div className="space-y-2">
-                <Label htmlFor="id_number_hint">
-                  Last 4 Digits of ID Number
-                </Label>
+                <Label>Last 4 Digits</Label>
                 <Input
-                  id="id_number_hint"
-                  value={formData.id_number_hint}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setFormData({ ...formData, id_number_hint: e.target.value })
-                  }
-                  placeholder="For verification purposes"
                   maxLength={4}
+                  value={formData.id_number_hint}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      id_number_hint: e.target.value,
+                    })
+                  }
                 />
               </div>
 
+              {/* Location */}
               <div className="space-y-2">
-                <Label htmlFor="last_seen_location">Last Seen Location *</Label>
+                <Label>Last Seen Location *</Label>
                 <Input
-                  id="last_seen_location"
                   required
                   value={formData.last_seen_location}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  onChange={(e) =>
                     setFormData({
                       ...formData,
                       last_seen_location: e.target.value,
                     })
                   }
-                  placeholder="e.g., Central Park, Starbucks Downtown"
                 />
               </div>
 
+              {/* Description */}
               <div className="space-y-2">
-                <Label htmlFor="description">Additional Details</Label>
+                <Label>Additional Details</Label>
                 <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  placeholder="Any other details that might help..."
                   rows={4}
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      description: e.target.value,
+                    })
+                  }
                 />
               </div>
 
               <Button
                 type="submit"
                 className="w-full bg-rose-600 hover:bg-rose-700"
-                disabled={reportMutation.isPending}
+                disabled={reportMutation.isPending || uploading}
               >
                 {reportMutation.isPending ? (
                   <>
