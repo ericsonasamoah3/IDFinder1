@@ -16,7 +16,7 @@ import { Upload, ArrowLeft, Loader2, X, CheckCircle } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "../utils";
 import { toast } from "sonner";
-import { createFoundID, listLostIDs } from "../lib/storage";
+import { createFoundID } from "../lib/storage";
 import type { IDType } from "../lib/storage";
 
 const PROCESS_URL = import.meta.env.VITE_ID_PROCESS;
